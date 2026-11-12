@@ -24,7 +24,7 @@ npm run secure    # http://127.0.0.1:3001  (em outro terminal)
 docker compose up --build
 ```
 
-Abra `http://127.0.0.1:3000` para ver o front-end e use o DevTools (F12 → Network) para ver o tráfego.
+Abra `http://127.0.0.1:3000` para ver o front-end. Na demo, use o navegador embutido do Burp (Proxy → Open browser) e veja o tráfego no Proxy → HTTP history.
 
 ## Contas
 
@@ -52,16 +52,17 @@ No `server.js`, procure por `[VULN-n]` e `[FIX-n]`.
 
 ## Material da demo
 
-A demo é feita com **Postman + DevTools do navegador (F12) + terminal**.
+A demo é feita com o **Burp Suite** (navegador embutido + Repeater + Intruder). Os scripts
+entram na parte de força bruta, e o Postman fica como plano B.
 
-- `postman/VulnStore.postman_collection.json`: importe no Postman. Pastas na ordem da palestra
-  (00 Setup → 05 Rate Limiting). O login salva o token sozinho na variável `token`.
-  Troque a variável `baseUrl` para `http://127.0.0.1:3001` para mostrar as correções.
-- `postman/ids-pedidos.csv`: dados para o Collection Runner (BOLA em escala, IDs 1000–1010).
-- `scripts/enum-orders.js`: BOLA em escala pelo terminal.
+- `scripts/enum-orders.js`: BOLA em escala pelo terminal (percorre IDs de pedido).
 - `scripts/brute-login.js`: enumeração de usuário + força bruta no login.
-- `scripts/brute-otp.js`: força bruta no código de recuperação de senha (4 dígitos).
-- `http/requisicoes.http`: as mesmas requisições em texto (VS Code + extensão REST Client), como plano B.
+- `scripts/brute-otp.js`: força bruta no código de recuperação (4 dígitos). O Intruder do
+  Burp Community é lento demais para os 10.000 códigos, então use este script.
+- `postman/VulnStore.postman_collection.json`: **plano B**. Importe no Postman; o login salva o
+  token na variável `token`. Troque `baseUrl` para `http://127.0.0.1:3001` nas correções.
+- `postman/ids-pedidos.csv`: dados para o Collection Runner (plano B do BOLA em escala).
+- `http/requisicoes.http`: as mesmas requisições em texto (VS Code + extensão REST Client), plano B.
 
 ```bash
 node scripts/enum-orders.js http://127.0.0.1:3000 1000 1010
@@ -73,28 +74,45 @@ node scripts/brute-otp.js   http://127.0.0.1:3000 ana@vulnstore.test
 O código de recuperação também aparece no console do servidor (simulando o e-mail):
 deixe esse terminal fora do telão.
 
-## Roteiro rápido no Postman
+## Configurando o Burp (uma vez)
 
-| Etapa | Onde | O que mostrar |
+1. A VulnStore é HTTP em `localhost`, então você **não** precisa instalar o certificado CA do
+   Burp (ele só é necessário para HTTPS).
+2. Abra o Burp → **Temporary project in memory** → **Use Burp defaults** → **Start Burp**.
+3. **Target → Scope**: adicione `http://127.0.0.1:3000` e `:3001`. No **Proxy → HTTP history**,
+   ligue **Show only in-scope items** para cortar o ruído.
+4. **Proxy → Open browser** e acesse `http://127.0.0.1:3000`. O navegador embutido captura até o
+   tráfego de `127.0.0.1` (um Chrome normal ignoraria o localhost).
+5. Deixe o **Intercept off** para navegar; ligue só para pausar e editar uma requisição ao vivo.
+6. Para o telão: aumente a fonte em **Settings → User interface → Font**.
+
+## Roteiro rápido no Burp
+
+| Etapa | No Burp | O que mostrar |
 |---|---|---|
-| Login | Navegador (F12 → Network) e `00 → Login como João` | Resposta traz `password` e `cpf` |
-| Exposição de dados | F12 → `reviews` e `01 → Avaliações` | Rota pública devolve o autor inteiro |
-| BOLA | `02 → Pedido de outro cliente (1002)` + `enum-orders.js` | Pedidos de todos os clientes |
-| BFLA | Ctrl+U no navegador (acha `/api/admin/users`) + `03` | Cliente lista e apaga usuários |
-| Mass Assignment | `04` na ordem: cupom 403 → PATCH com `role` → cupom 201 | Cliente vira admin |
-| Rate limiting | `05` (mensagens) + `brute-login.js` + `brute-otp.js` | Senha de outras contas |
+| Login | HTTP history → `login` → aba Response | Resposta traz `password` (hash) e `cpf` |
+| Exposição de dados | HTTP history → `reviews` → Send to Repeater, apague o `Authorization` | Rota pública devolve o autor inteiro |
+| BOLA | Repeater: `GET /api/orders/1003` → troque para `1002`; depois Intruder nos IDs | Pedidos de todos os clientes |
+| BFLA | Repeater: troque o caminho para `GET /api/admin/users`, depois `DELETE .../5` | Cliente lista e apaga usuários |
+| Mass Assignment | Repeater: cupom 403 → `PATCH /api/users/me` com `role` e `credits` → cupom 201 | Cliente vira admin |
+| Rate limiting | Repeater (compare as mensagens) + `brute-login.js` + `brute-otp.js` | Senha de outras contas |
 
-Para cada etapa, troque `baseUrl` para a porta 3001, refaça o login e repita: a correção aparece.
+Para cada etapa, troque o alvo do Repeater para a porta `3001` e repita: a correção aparece
+(404, 403, 400 ou 429).
+
+Extensão recomendada: **Autorize** (BApp Store). Ela repete cada requisição com o token de outro
+usuário e sinaliza BOLA/BFLA sozinha. Precisa do Jython configurado, então deixe como opcional.
 
 ## Resetar entre ensaios
 
 ```bash
 curl -X POST http://127.0.0.1:3000/api/__reset
 ```
-Ou rode `00 — Setup → Resetar laboratório` no Postman, ou reinicie o processo (a base é em memória).
+Rode também na `:3001` (ou reinicie os processos; a base é em memória). O Burp Community não salva
+o projeto, então remonte as abas do Repeater pouco antes de apresentar.
 
-## Indo além: Burp Suite
+## Plano B: Postman e scripts
 
-No pentest profissional, o Burp Suite Community (gratuito) faz o mesmo papel como proxy:
-Repeater para editar e reenviar, Intruder para automatizar e a extensão **Autorize**, que repete
-cada requisição com o token de outro usuário (ótima para achar BOLA e BFLA).
+Se o Burp der problema no dia, a mesma demo roda pela coleção do Postman (pasta `postman/`, pastas
+`00` a `05`, na ordem da palestra) ou pelos scripts no terminal. O `http/requisicoes.http` tem as
+requisições cruas para o VS Code com a extensão REST Client.
