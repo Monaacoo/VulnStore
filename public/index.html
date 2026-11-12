@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VulnStore</title>
+<style>
+  :root { --bg:#0f1115; --card:#181b22; --line:#2a2f3a; --txt:#e6e8ee; --mut:#9aa3b2; --acc:#4f8cff; --warn:#ff6b6b; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:var(--bg); color:var(--txt); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:16px 28px; border-bottom:1px solid var(--line); }
+  header b { font-size:20px; } header span { color:var(--mut); font-size:13px; }
+  main { max-width:960px; margin:24px auto; padding:0 20px; display:grid; gap:20px; grid-template-columns:1fr 1fr; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px; }
+  .full { grid-column: 1 / -1; }
+  h2 { margin:0 0 12px; font-size:16px; }
+  input, button { font:inherit; padding:9px 12px; border-radius:8px; border:1px solid var(--line); background:#11141a; color:var(--txt); width:100%; margin-bottom:8px; }
+  button { background:var(--acc); border:none; cursor:pointer; font-weight:600; }
+  ul { list-style:none; padding:0; margin:0; } li { padding:8px 0; border-bottom:1px solid var(--line); font-size:14px; }
+  li:last-child { border:none; } .mut { color:var(--mut); font-size:13px; }
+  .banner { background:#2a1414; border:1px solid #5a2323; color:#ffb3b3; padding:8px 14px; font-size:13px; text-align:center; }
+  #adminLink { display:none; color:var(--warn); }
+</style>
+</head>
+<body>
+<div class="banner">Ambiente de laboratório propositalmente vulnerável. Use apenas localmente.</div>
+<header><b>VulnStore</b><span id="who">não autenticado</span></header>
+<main>
+  <section class="card" id="loginCard">
+    <h2>Entrar</h2>
+    <input id="email" placeholder="e-mail" value="joao@vulnstore.test">
+    <input id="password" type="password" placeholder="senha" value="joao123">
+    <button onclick="login()">Entrar</button>
+    <p class="mut">Contas de teste: joao@vulnstore.test / joao123</p>
+  </section>
+
+  <section class="card">
+    <h2>Meus pedidos</h2>
+    <ul id="orders"><li class="mut">Faça login para ver seus pedidos.</li></ul>
+    <a id="adminLink" href="#" onclick="loadAdmin()">Painel administrativo</a>
+  </section>
+
+  <section class="card full">
+    <h2>Avaliações — Notebook Gamer X</h2>
+    <ul id="reviews"></ul>
+  </section>
+
+  <section class="card full" id="adminCard" style="display:none">
+    <h2>Usuários (admin)</h2>
+    <ul id="users"></ul>
+  </section>
+</main>
+<script>
+  let token = null;
+  const api = (url, opts = {}) => fetch(url, { ...opts, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : {}) } }).then(r => r.json());
+
+  async function login() {
+    const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email: email.value, password: password.value }) });
+    if (!r.token) return alert(r.error);
+    token = r.token;
+    who.textContent = r.user.name + ' (' + r.user.role + ')';
+    // A "proteção" do painel admin é só esconder o link no front-end...
+    adminLink.style.display = r.user.role === 'admin' ? 'inline' : 'none';
+    loadOrders();
+  }
+
+  async function loadOrders() {
+    const list = await api('/api/orders');
+    orders.innerHTML = list.map(o => `<li>Pedido #${o.id} — R$ ${o.total.toFixed(2)} <span class="mut">(${o.status})</span></li>`).join('') || '<li class="mut">Nenhum pedido</li>';
+  }
+
+  async function loadReviews() {
+    const list = await api('/api/products/1/reviews');
+    // O front-end exibe apenas o nome do autor. O que mais veio na resposta?
+    reviews.innerHTML = list.map(r => `<li>${'★'.repeat(r.rating)} ${r.comment} <span class="mut">— ${r.author.name}</span></li>`).join('');
+  }
+
+  async function loadAdmin() {
+    const list = await api('/api/admin/users');
+    adminCard.style.display = 'block';
+    users.innerHTML = list.map(u => `<li>${u.id} — ${u.email} <span class="mut">${u.role}</span></li>`).join('');
+  }
+
+  loadReviews();
+</script>
+</body>
+</html>

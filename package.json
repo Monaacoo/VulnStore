@@ -1,0 +1,17 @@
+{
+  "name": "vulnstore-api",
+  "version": "1.0.0",
+  "description": "API REST propositalmente vulnerável para demonstração (palestra)",
+  "main": "server.js",
+  "scripts": {
+    "vuln": "node server.js vuln",
+    "secure": "node server.js secure"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.22.3",
+    "jsonwebtoken": "^9.0.3"
+  }
+}

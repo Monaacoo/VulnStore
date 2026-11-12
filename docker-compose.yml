@@ -1,0 +1,15 @@
+services:
+  vulnerable:
+    build: .
+    environment:
+      MODE: vuln
+      PORT: 3000
+    ports:
+      - "127.0.0.1:3000:3000"   # só localhost — não exponha na rede do evento
+  secure:
+    build: .
+    environment:
+      MODE: secure
+      PORT: 3001
+    ports:
+      - "127.0.0.1:3001:3001"
