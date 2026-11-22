@@ -1,0 +1,14 @@
+users
+coupons
+products
+orders
+settings
+dashboard
+reports
+roles
+permissions
+customers
+invoices
+discounts
+config
+stats
